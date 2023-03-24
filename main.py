@@ -1,3 +1,4 @@
+import pytz
 import requests
 import pandas as pd
 from dotenv import load_dotenv
@@ -13,6 +14,20 @@ from telegram.ext import Application, CommandHandler, Job, MessageHandler
 df_data = pd.DataFrame(columns=['chat_id', 'gitlab_url', 'project_id', 'access_token', 'branch', 'last_commit'])
 
 
+from dateutil import parser
+from datetime import datetime, timedelta
+
+def add_one_second(timestamp):
+    dt = datetime.fromisoformat(timestamp[:-1])  # Преобразуем строку в datetime
+    new_dt = dt + timedelta(seconds=1)  # Прибавляем одну секунду
+    return new_dt.isoformat() + 'Z'  # Преобразуем обратно в строку и добавляем 'Z'
+
+def convert_time(time_str):
+    dt = parser.isoparse(time_str)
+    dt_utc = dt.astimezone(pytz.utc)
+    return dt_utc.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
 def updateData(update, context):
     df_data = pd.read_csv("data.csv")
     df_data.loc[df_data.chat_id == update.effective_chat.id] = \
@@ -21,7 +36,7 @@ def updateData(update, context):
          context.chat_data.get("project_id", 'Project id not found'),
          context.chat_data.get("access_token", 'Access Token not found'),
          context.chat_data.get("branch", ''),
-         context.chat_data.get("last_commit", '2023-01-01T00:00:00.000+00:00')]
+         context.chat_data.get("last_commit", '')]
     df_data.to_csv("data.csv", index=False)
 
 def getData(chat_id):
@@ -59,7 +74,7 @@ async def setData(update, context):
     # print(df_data)
     id = update.effective_chat.id
     if id not in df_data.chat_id.values:
-        df_data.loc[len(df_data)] = [id, '', '', '', '', '2023-01-01T00:00:00.000+00:00']
+        df_data.loc[len(df_data)] = [id, '', '', '', '', '']
         df_data.to_csv("data.csv", index=False)
         return
 
@@ -86,7 +101,7 @@ def getCommits(gitlab_url, project_id, access_token, branch='', last_commit=''):
     if isinstance(branch, str) and branch != '':
         ref += 'ref_name=' + str(branch)
     if isinstance(last_commit, str) and last_commit != '':
-        ref += '&since=' + last_commit
+        ref += '&since=' + add_one_second(convert_time(last_commit))
     ref += '&per_page=10'
 
     print(ref)
@@ -202,9 +217,9 @@ async def getLast10Commits(update, context):
             if i == 10:
                 break
             i += 1
-            commitsSTR += "\n📅 date: _" + commit['committed_date'] + "_" + \
-                          "\n🤡 author: *" + commit['author_name'] + "*" + \
-                          "\n✉ message: '" + commit['message'] + "'\n"
+            commitsSTR += "\n📅 date:    " + commit['committed_date'] + "" + \
+                          "\n🤡 author:  " + commit['author_name'] + "" + \
+                          "\n✉ message: " + commit['message'] + "\n"
 
         await update.message.reply_text(commitsSTR)
     else:
@@ -232,9 +247,9 @@ async def getAllCommitsSinceLast(context, app):
             if i == 10:
                 break
             i += 1
-            commitsSTR += "\n📅 date: _" + commit['committed_date'] + "_" + \
-                          "\n🤡 author: *" + commit['author_name'] + "*" + \
-                          "\n✉ message: '" + commit['message'] + "'\n"
+            commitsSTR += "\n📅 date:    " + commit['committed_date'] + "" + \
+                          "\n🤡 author:  " + commit['author_name'] + "" + \
+                          "\n✉ message: " + commit['message'] + "\n"
 
         if len(commits) > 0:
             await app.bot.send_message(chat_id=str(chat_id), text=str(commitsSTR))
@@ -268,7 +283,7 @@ async def getAllCommitsInDB(context):
 def StartJob(app):
     print("start job")
 
-    job = app.job_queue.run_repeating(getAllCommitsInDB, 600, data=app)
+    job = app.job_queue.run_repeating(getAllCommitsInDB, 10, data=app)
 
 
 
