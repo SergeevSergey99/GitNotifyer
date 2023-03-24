@@ -2,6 +2,7 @@ import requests
 import pandas as pd
 from dotenv import load_dotenv
 import os
+import math
 
 load_dotenv() # Загрузить переменные окружения из файла .env
 
@@ -33,6 +34,19 @@ def getData(chat_id):
         "last_commit": df_data.loc[df_data.chat_id == chat_id, 'last_commit'].values[0]
     }
     return data
+def getAllData():
+    df_data = pd.read_csv("data.csv")
+    data = []
+    for i in range(len(df_data)):
+        data.append({
+            "chat_id": df_data.loc[i, 'chat_id'],
+            "gitlab_url": df_data.loc[i, 'gitlab_url'],
+            "project_id": df_data.loc[i, 'project_id'],
+            "access_token": df_data.loc[i, 'access_token'],
+            "branch": df_data.loc[i, 'branch'],
+            "last_commit": df_data.loc[i, 'last_commit']
+        })
+    return data
 
 def updateLastCommit(chat_id, last_commit):
     df_data = pd.read_csv("data.csv")
@@ -45,7 +59,7 @@ async def setData(update, context):
     # print(df_data)
     id = update.effective_chat.id
     if id not in df_data.chat_id.values:
-        df_data.loc[len(df_data)] = [id, '', '', '', '']
+        df_data.loc[len(df_data)] = [id, '', '', '', '', '2023-01-01T00:00:00.000+00:00']
         df_data.to_csv("data.csv", index=False)
         return
 
@@ -67,15 +81,18 @@ async def setData(update, context):
 
 
 # получение списка коммитов
-def getCommits(gitlab_url, project_id, access_token, branch='', last_commit='2023-01-01T00:00:00.000+00:00'):
-    ref = f'{gitlab_url}/api/v4/projects/{project_id}/repository/commits'
-    if branch != '':
-        ref += '?ref_name=' + branch
-    ref += '&since=' + last_commit + '&per_page=10'
+def getCommits(gitlab_url, project_id, access_token, branch='', last_commit=''):
+    ref = f'{gitlab_url}/api/v4/projects/{project_id}/repository/commits?'
+    if isinstance(branch, str) and branch != '':
+        ref += 'ref_name=' + str(branch)
+    if isinstance(last_commit, str) and last_commit != '':
+        ref += '&since=' + last_commit
+    ref += '&per_page=10'
 
     print(ref)
     response = requests.get(ref, headers={'Authorization': f'Bearer {access_token}'})
     commits = response.json()
+
     return commits
 
 
@@ -181,47 +198,49 @@ async def getLast10Commits(update, context):
         commitsSTR = ""
         for commit in commits:
             if i == 0:
-                context.chat_data["last_commit"] = commit['committed_date']
                 updateData(update, context)
             if i == 10:
                 break
             i += 1
-            commitsSTR += "commit id: " + commit['id'] + \
-                          "\ndate: " + commit['committed_date'] + \
-                          "\nauthor: " + commit['author_name'] + \
-                          "\nmessage: " + commit['message'] + "\n"
+            commitsSTR += "\n📅 date: _" + commit['committed_date'] + "_" + \
+                          "\n🤡 author: *" + commit['author_name'] + "*" + \
+                          "\n✉ message: '" + commit['message'] + "'\n"
 
         await update.message.reply_text(commitsSTR)
     else:
         await update.message.reply_text("Not all data setted")
 
 
-async def getAllCommitsSinceLast(_context):
+async def getAllCommitsSinceLast(context, app):
 
-    context = _context.job.data
     chat_id = context['chat_id']
-    data = getData(chat_id)
-    gitlab_url = data['gitlab_url']
-    project_id = data['project_id']
-    access_token = data['access_token']
-    branch = data['branch']
-    commits = getCommits(gitlab_url, project_id, access_token, branch, data['last_commit'])
-    i = 0
-    print("commits: " + str(len(commits)))
-    commitsSTR = ""
-    for commit in commits:
-        if i == 0:
-            updateLastCommit(chat_id, commit['committed_date'])
-        if i == 10:
-            break
-        i += 1
-        commitsSTR += "commit id: " + commit['id'] + \
-                      "\ndate: " + commit['committed_date'] + \
-                      "\nauthor: " + commit['author_name'] + \
-                      "\nmessage: " + commit['message'] + "\n"
+    gitlab_url = context['gitlab_url']
+    project_id = context['project_id']
+    access_token = context['access_token']
+    branch = context['branch']
+    last = context['last_commit']
 
-    if len(commits) > 0:
-        await _context.bot.send_message(chat_id=chat_id, text=commitsSTR)
+    try:
+        if not isinstance(gitlab_url, str) or not isinstance(project_id, str) or not isinstance(access_token, str):
+            return
+
+        commits = getCommits(gitlab_url, project_id, access_token, branch, last)
+        i = 0
+        print("chat_id " + str(chat_id) + " commits: " + str(len(commits)))
+        commitsSTR = ""
+        for commit in commits:
+            if i == 10:
+                break
+            i += 1
+            commitsSTR += "\n📅 date: _" + commit['committed_date'] + "_" + \
+                          "\n🤡 author: *" + commit['author_name'] + "*" + \
+                          "\n✉ message: '" + commit['message'] + "'\n"
+
+        if len(commits) > 0:
+            await app.bot.send_message(chat_id=str(chat_id), text=str(commitsSTR))
+            updateLastCommit(chat_id, commits[0]['committed_date'])
+    except Exception as e:
+        print(e)
 
 
 async def info(update, context):
@@ -240,17 +259,16 @@ async def info(update, context):
     STR += "/getLast10Commits - get last 10 commits\n"
     await update.message.reply_text(STR)
 
+async def getAllCommitsInDB(context):
+    data = getAllData()
+    for i in data:
+        print(i)
+        await getAllCommitsSinceLast(i, context.job.data)
 
-async def StartJob(update, context):
-    await setData(update, context)
-    if isAllSetted(context):
-        print("start job")
-        job_settings = {
-            'chat_id': update.message.chat_id,
-            'update': update,
-        }
-        job = context.job_queue.run_repeating(getAllCommitsSinceLast, 600, data=job_settings)
-        context.chat_data['job'] = job
+def StartJob(app):
+    print("start job")
+
+    job = app.job_queue.run_repeating(getAllCommitsInDB, 600, data=app)
 
 
 
@@ -276,7 +294,6 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler('setBranch', setBranch))
     application.add_handler(CommandHandler('getBranch', getBranch))
     application.add_handler(CommandHandler('info', info))
-    application.add_handler(CommandHandler('startJob', StartJob))
-
+    StartJob(application)
     application.run_polling()
     # application.stop()
