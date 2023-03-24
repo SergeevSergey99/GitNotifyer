@@ -4,6 +4,12 @@ import pandas as pd
 from dotenv import load_dotenv
 import os
 import math
+#import signal
+#def exit_gracefully(signum, frame):
+#    print("Выполнение скрипта завершено.")
+#    exit(0)
+#signal.signal(signal.SIGALRM, exit_gracefully)
+#signal.alarm(3600) # задаем время в секундах
 
 load_dotenv() # Загрузить переменные окружения из файла .env
 
@@ -218,8 +224,11 @@ async def getLast10Commits(update, context):
                 break
             i += 1
             commitsSTR += "\n📅 date:    " + commit['committed_date'] + "" + \
-                          "\n🤡 author:  " + commit['author_name'] + "" + \
+                          "\n✍ author:  " + commit['author_name'] + "" + \
                           "\n✉ message: " + commit['message'] + "\n"
+
+            if(commit)
+
 
         await update.message.reply_text(commitsSTR)
     else:
@@ -248,7 +257,7 @@ async def getAllCommitsSinceLast(context, app):
                 break
             i += 1
             commitsSTR += "\n📅 date:    " + commit['committed_date'] + "" + \
-                          "\n🤡 author:  " + commit['author_name'] + "" + \
+                          "\n✍ author:  " + commit['author_name'] + "" + \
                           "\n✉ message: " + commit['message'] + "\n"
 
         if len(commits) > 0:
@@ -283,7 +292,7 @@ async def getAllCommitsInDB(context):
 def StartJob(app):
     print("start job")
 
-    job = app.job_queue.run_repeating(getAllCommitsInDB, 10, data=app)
+    job = app.job_queue.run_repeating(getAllCommitsInDB, 300, data=app)
 
 
 
