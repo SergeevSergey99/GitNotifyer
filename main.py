@@ -227,8 +227,6 @@ async def getLast10Commits(update, context):
                           "\n✍ author:  " + commit['author_name'] + "" + \
                           "\n✉ message: " + commit['message'] + "\n"
 
-            if(commit)
-
 
         await update.message.reply_text(commitsSTR)
     else:
