@@ -1,3 +1,3 @@
 chat_id,gitlab_url,project_id,access_token,branch,last_commit
--696375917,https://gitlab.com,tophouse%2Fwanderer,glpat-8QxswWwbBC1xsXU5EEep,OngoingDevBranch,2023-03-24T08:11:18.000+03:00
-131856094,https://gitlab.com,tophouse%2Fwanderer,glpat-8QxswWwbBC1xsXU5EEep,,2023-01-01T00:00:00.000+00:00
+-696375917,https://gitlab.com,tophouse%2Fwanderer,,OngoingDevBranch,2023-03-24T08:11:18.000+03:00
+131856094,https://gitlab.com,tophouse%2Fwanderer,,,2023-01-01T00:00:00.000+00:00
